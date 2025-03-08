@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ada-prosperity3-backtest"
-version = "0.1.1-alpha.1"
+version = "0.1.1"
 description = "Backtest tool for Prosperity-3 trading competition, by team ADA Refactor."
 authors = [
     { name = "Yanxu Chen", email = "alphagem618@gmail.com" }
