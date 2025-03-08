@@ -1,0 +1,2 @@
+include ada_prosperity3_backtest/data/round0/day0/prices00.csv
+include ada_prosperity3_backtest/data/round0/day0/trades00.csv

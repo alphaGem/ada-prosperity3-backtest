@@ -10,4 +10,5 @@ setup(
             "ada-prosperity3-backtest = ada_prosperity3_backtest.cli:main",
         ],
     },
+    include_package_data=True,
 )

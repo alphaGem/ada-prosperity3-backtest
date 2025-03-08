@@ -22,7 +22,7 @@ def main():
         
         if args.day is None:
             print(f"Running backtest on all days of round {args.round}")
-            
+            raise NotImplementedError("Please specify the --day variable; running without --day will be supported soon")
         else:
             print(f"Running backtest on day {args.day} of round {args.round}")
 
