@@ -128,13 +128,13 @@ def step(state: TradingState, orders: dict[Product, list[Order]], conversions: i
                 new_position_max[p] = new_position_max.get(p, 0) + order.quantity
             if order.quantity < 0:
                 new_position_min[p] = new_position_min.get(p, 0) + order.quantity
-    blacklist = {}
+    blacklist = set()
     for p in new_position_max:
         if new_position_max[p]>position_limit[p]:
-            blacklist.update(p)
+            blacklist.add(p)
     for p in new_position_min:
         if new_position_min[p]<-position_limit[p]:
-            blacklist.update(p)
+            blacklist.add(p)
     orders = {k:v for k,v in orders.items() if k not in blacklist}
     # TODO: conversion
     pass
@@ -165,7 +165,7 @@ def step(state: TradingState, orders: dict[Product, list[Order]], conversions: i
                 pass # ignore zero order
     # match orders observed from the new trading state to the current one
     
-    for p in new_state.market_trades:
+    for p in orders:
         own_bid_orders = {}
         for order in orders[p]:
             if order.quantity>0:
@@ -174,6 +174,8 @@ def step(state: TradingState, orders: dict[Product, list[Order]], conversions: i
         for order in orders[p]:
             if order.quantity<0:
                 own_ask_orders[order.price] = own_ask_orders.get(order.price, 0) + order.quantity
+        if p not in new_state.market_trades:
+            continue
         for trade in new_state.market_trades[p]:
             if trade.timestamp != state.timestamp:
                 continue
