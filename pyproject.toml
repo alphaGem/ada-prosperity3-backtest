@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ada-prosperity3-backtest"
+version = "0.1.0"
+description = "Backtest tool for Prosperity-3 trading competition, by team ADA Refactor."
+authors = [
+    { name = "Yanxu Chen", email = "alphagem618@gmail.com" }
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+dependencies = ["pandas"]  # Add dependencies if needed, e.g., numpy, pandas
+
+[project.scripts]
+ada-prosperity3-backtest = "ada_prosperity3_backtest.cli:main"
