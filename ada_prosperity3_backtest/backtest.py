@@ -6,6 +6,7 @@ from datetime import datetime
 from copy import deepcopy
 import pandas as pd
 from .log_to_states import read_log
+from tqdm import tqdm
 
 class BacktestResult:
     def __init__(self, pnls:list[dict[Symbol,int]], sandbox_logs:list[dict], prices_df:pd.DataFrame, trades_df:pd.DataFrame):
@@ -42,7 +43,7 @@ def get_pnl(cash: dict[Symbol, int], state: TradingState):
         fair_buy = sum([k*v for k,v in od.buy_orders.items()])/sum(od.buy_orders.values())
         fair_sell = sum([k*v for k,v in od.sell_orders.items()])/sum(od.sell_orders.values())
         fair = (fair_buy+fair_sell)/2
-        pnl[p] += fair*state.position[p]
+        pnl[p] += fair*state.position.get(p,0)
     return pnl
 
 def save_result(script, output, tag):
@@ -92,8 +93,7 @@ def test_trader_with_states(trader, states: list[TradingState], script = None, i
     cashes = [{"KELP": 0, "RAINFOREST_RESIN": 0}]
     pnls = [{"KELP": 0, "RAINFOREST_RESIN": 0}]
     sandbox_logs = []
-    to_print = "Sandbox logs:\n"
-    for i in range(n):
+    for i in tqdm(range(n), "Simulation"):
         cash = deepcopy(cashes[-1])
         output_buffer = io.StringIO()
         with contextlib.redirect_stdout(output_buffer):
@@ -102,11 +102,6 @@ def test_trader_with_states(trader, states: list[TradingState], script = None, i
             conversions: int
             traderData: str
         algo_log = output_buffer.getvalue().strip()
-        to_print += json.dumps({
-            "sandboxLog": "",
-            "lambdaLog": algo_log,
-            "timestamp": i*100
-        }, indent=2)+'\n'
         sandbox_logs.append({
             "sandboxLog": "",
             "lambdaLog": algo_log,
@@ -125,12 +120,14 @@ def test_trader_with_states(trader, states: list[TradingState], script = None, i
             cashes.append(cash)
             pnls.append(get_pnl(cash, state))
     
+    prices_df, trades_df = None, None
     prices_df, trades_df = states_to_df(states, pnls)
     prices_csv = prices_df.to_csv(sep=';', index=False)
     prices_str = io.StringIO(prices_csv).getvalue()
     trades_csv = trades_df.to_csv(sep=';', index=False)
     trades_str = io.StringIO(trades_csv).getvalue()
     
+    to_print = "Sandbox logs:\n"+"\n".join([json.dumps(l, indent=2) for l in sandbox_logs])
     to_print += f"\n\n\nActivities log:\n{prices_str}\n\n\nTrade History:\n{trades_str}"
     now = datetime.now()
     hash = hashlib.sha256(script.encode()).hexdigest()[:6]

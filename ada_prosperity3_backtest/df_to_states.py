@@ -1,6 +1,7 @@
 import pandas as pd
 from copy import deepcopy
 from .datamodel import *
+from tqdm import tqdm
 
 def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingState]:
     states = []
@@ -22,7 +23,12 @@ def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingStat
     
     # Process price data to generate TradingState instances
     market_trades = {}
-    for timestamp, grouped_df in prices.groupby("timestamp"):
+    n = len(prices)
+    last_j = 0
+    for j in tqdm(range(n), "Loading Data"):
+        if j!=n-1 and prices["timestamp"][j]==prices["timestamp"][j+1]:
+            continue
+        timestamp = int(prices["timestamp"][j])
         listings = {}
         order_depths = {}
         market_trades.update(trade_dict.get(timestamp-100, {}))  # Retrieve market trades for the timestamp
@@ -30,8 +36,8 @@ def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingStat
         position = {}  # Initialize empty positions
         observations = Observation({}, {})  # Empty for now
         
-        for _, row in grouped_df.iterrows():
-            product = row["product"]
+        for k in range(last_j, j+1):
+            product = prices["product"][k]
             listings[product] = {
                 "symbol": product,
                 "product": product,
@@ -40,11 +46,11 @@ def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingStat
 
             # Extract order book data
             order_depth = OrderDepth()
-            for i in range(1, 4):
-                bid_price = row.get(f"bid_price_{i}")
-                bid_volume = row.get(f"bid_volume_{i}")
-                ask_price = row.get(f"ask_price_{i}")
-                ask_volume = row.get(f"ask_volume_{i}")
+            for i in range(1,4):
+                bid_price = prices[f"bid_price_{i}"][k]
+                bid_volume = prices[f"bid_volume_{i}"][k]
+                ask_price = prices[f"ask_price_{i}"][k]
+                ask_volume = prices[f"ask_volume_{i}"][k]
                 
                 if not pd.isna(bid_price) and not pd.isna(bid_volume):
                     order_depth.buy_orders[int(bid_price)] = int(bid_volume)
@@ -66,7 +72,7 @@ def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingStat
         )
         
         states.append(state)
-    
+        last_j = j+1
     return states
 
 def states_to_df(states: list[TradingState], pnl: list[dict[Symbol, int]]) -> tuple[pd.DataFrame, pd.DataFrame]:

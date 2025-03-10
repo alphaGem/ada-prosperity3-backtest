@@ -115,10 +115,16 @@ def step(state: TradingState, orders: dict[Product, list[Order]], conversions: i
         "RAINFOREST_RESIN": 50
     }
     inf = 10**9
-    ns = deepcopy(new_state)
-    ns.traderData = traderData
-    ns.own_trades = {s:[] for s in state.listings}
-    ns.market_trades = {s:[] for s in state.listings}
+    ns = TradingState(
+        traderData = traderData,
+        timestamp = new_state.timestamp,
+        listings = new_state.listings,
+        order_depths = new_state.order_depths, 
+        own_trades = {s:[] for s in state.listings},
+        market_trades = {s:[] for s in state.listings},
+        position = {},
+        observations = new_state.observations
+    )
     # check order position
     new_position_max = deepcopy(state.position)
     new_position_min = deepcopy(state.position)
