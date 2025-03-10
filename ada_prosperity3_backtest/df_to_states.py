@@ -11,7 +11,7 @@ def df_to_states(prices: pd.DataFrame, trades: pd.DataFrame) -> list[TradingStat
     trades["seller"] = trades["seller"].astype(str).fillna("", inplace=True)
     for _, row in trades.iterrows():
         ts, sym, price, qty, buyer, seller = row["timestamp"], row["symbol"], row["price"], row["quantity"], row["buyer"], row["seller"]
-        trade_obj = Trade(symbol=sym, price=int(price), quantity=int(qty), buyer=buyer, seller=seller, timestamp=ts)
+        trade_obj = Trade(symbol=sym, price=int(price), quantity=int(qty), buyer=buyer if buyer is not None else "", seller=seller if seller is not None else "", timestamp=ts)
         
         if ts not in trade_dict:
             trade_dict[ts] = {}
