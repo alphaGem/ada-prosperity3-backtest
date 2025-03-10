@@ -1,4 +1,4 @@
-#### How to use
+#### How to use in commandline
 
 1. `pip install ada-prosperity3-backtest`. Or, if you have already installed it, remember to upgrade frequently because the package is still in development, and there will be data update during the contest.
 
@@ -6,13 +6,43 @@
 
 - `ada-prosperity3-backtest script.py --round x [--day y]`
 
-   This will run `script.py` for you on round `x` day `y`. <del>If `--day` is not specified, it will run on all days. [TODO]</del>The backtest tool should show you some information in the terminal.
+   This will run `script.py` for you on round `x` day `y`. If `--day` is not specified, it will run on all days. The backtest tool should show you some information in the terminal.
 
    Currently, we only support round 0 day 0, which is the tutorial round.
 
-3. After running, you should see a `ada_backtest` folder at the place you run the commandline, and inside there is a `log` folder contaning backtest logs, which is compatible with the log output from the website, and a `script` folder containing the script you run backtest on, with some additional comments at the beginning as a summary of the backtest result. The files are named `mmdd-HHMMSS-ffffff-hhhhhh.log/py`, where mmdd is the month & date, HHMMSS is the hour, minute and second, ffffff is the microsecond, and hhhhhh is the hash of the script.
+3. After running, you should see a `ada_backtest` folder at the place you run the commandline, and inside there is a `log` folder contaning backtest logs, which is compatible with the log output from the website, and a `script` folder containing the script you run backtest on, with some additional comments at the beginning as a summary of the backtest result. The files are named `mmdd_HHMMSS_RxDy_hhhhhh.log/py`, where mmdd is the month & date, HHMMSS is the hour, minute and second, RxDy means day y of round x, and hhhhhh is the hash of the script.
 
 4. Iterate your algorithm accordingly!
+
+#### How to use in .ipynb
+
+```python
+from ada_prosperity3_backtest.backtest import run_backtest_with_round_and_day
+result = run_backtest_with_round_and_day(trader, round, day, script, infix)
+'''
+Arguments:
+    trader: Trader, your strategy
+    round: int
+    day: int
+    script: [str|None], the script you want to save. If none, we will try to automatically detect the Trader class.
+    infix: [str|None], the infix of saving.
+Returns:
+    result: BacktestResult, consisting of:
+        result.pnls, a list of dictionary, the breakdown of accumulated pnls for each product in each turn.
+        result.sandbox_logs: list[dict], the sandbox logs, containing your model's output.
+        result.prices_df: pandas.DataFrame, the price history from the simulation.
+        result.trades_df: pandas.DataFrame, the trade history from the simulation.
+'''
+```
+
+Example on tutorial round:
+
+```
+from ada_prosperity3_backtest.backtest import run_backtest_with_round_and_day
+result = run_backtest_with_round_and_day(trader, 0, 0)
+```
+
+WARNING: the back-up code under this calling method is automatically generated from `trader`, and is not guaranteed to be identical as your original code. Take your own risk when using!
 
 #### How it simulates
 
@@ -58,6 +88,8 @@ The following are some pros and cons of this backtester.
 
 3. The backtester may also overestimate your performance, because of overfitting or other reasons.
 
+According to our available data (n<10), the website result in the tutorial round seems to be around 110%-140% of the result of this backtester. You can take 125% as an estimation.
+
 #### TODO List
 
 - [x] Generate log files that are compatible with the log files from the website backtest.
@@ -67,8 +99,12 @@ The following are some pros and cons of this backtester.
 
     - [x] Third part: Trades history
 
-- [ ] Support running on all days at the same time.
+- [x] Support running on all days at the same time.
+
+- [x] Support running on `.ipynb` or regular python files.
 
 - [ ] Support data from Prosperity2 to test the usage at a larger scale.
 
 - [ ] Support conversions.
+
+- [ ] Support secret spices and secret bots, which allows users to customize.

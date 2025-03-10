@@ -1,28 +1,39 @@
 from .datamodel import *
 from .logic import step
-from .df_to_states import states_to_df
-import importlib.util
-import os, io, hashlib, contextlib, sys
+from .df_to_states import states_to_df, df_to_states
+import os, io, hashlib, contextlib, inspect, warnings
 from datetime import datetime
 from copy import deepcopy
-from abc import abstractmethod
+import pandas as pd
+from .log_to_states import read_log
 
+class BacktestResult:
+    def __init__(self, pnls:list[dict[Symbol,int]], sandbox_logs:list[dict], prices_df:pd.DataFrame, trades_df:pd.DataFrame):
+        self.pnls = pnls
+        self.sandbox_logs = sandbox_logs
+        self.prices_df = prices_df
+        self.trades_df = trades_df
 
-class Trader:
-    @abstractmethod
-    def run(self, state: TradingState) -> tuple[dict[list[Order]], int, str]:
-        pass
+def get_states_from_log(log_dir) -> list[TradingState]:
+    with open(log_dir,'r') as f:
+        states = read_log(f.read())
+    return states
 
+def get_states_from_round_and_day(round, day) -> list[TradingState]:
 
-def load_strategy(script_path):
-    """Dynamically load a trading strategy from a Python script."""
-    with open(script_path,'r') as f:
-        script = f.read()
-    sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)),"env"))
-    spec = importlib.util.spec_from_file_location("strategy", script_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return script, module
+    script_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Construct the absolute path to the CSV file
+    folder_path = os.path.join(script_dir, "data", f"round{round}", f"day{day}")
+
+    prices_path = os.path.join(folder_path, f"prices{round}{day}.csv")
+    trades_path = os.path.join(folder_path, f"trades{round}{day}.csv")
+
+    price_df = pd.read_csv(prices_path, sep=';')
+    trade_df = pd.read_csv(trades_path, sep=';')
+    states = df_to_states(price_df, trade_df)
+    return states
+
 
 def get_pnl(cash: dict[Symbol, int], state: TradingState):
     pnl = {k:v for k,v in cash.items()}
@@ -52,42 +63,55 @@ def save_result(script, output, tag):
     with open(f"{folder_name}/script/{tag}.py","w") as f:
         f.write(script)
 
-def run_backtest(script_path, states: list[TradingState]) -> list[int]:
-    """Executes the backtest using the Trader class."""
-    if not os.path.exists(script_path):
-        print(f"Error: {script_path} does not exist.")
-        return
-
-    script, strategy = load_strategy(script_path)
-
-    if not hasattr(strategy, "Trader"):
-        print("Error: The strategy file must define a `Trader` class.")
-        return
-
-    trader:Trader = strategy.Trader()
+# Function to generate the class source code
+def generate_class_source(cls):
+    # Get the list of functions in the class
+    functions = [func for func, _ in inspect.getmembers(cls, predicate=inspect.isfunction)]
     
+    # Start the class definition string
+    class_code = f"class {cls.__name__}:\n"
+    
+    # Add each function to the class code
+    for func_name in functions:
+        func = getattr(cls, func_name)
+        # Get the function signature and the function body
+        class_code += inspect.getsource(func)
+
+    return class_code
+
+def test_trader_with_states(trader, states: list[TradingState], script = None, infix = ''):
     if not hasattr(trader, "run"):
         print("Error: The `Trader` class must have a `run` method.")
         return
-
-    trader:Trader
-
+    if script is None:
+        script = generate_class_source(trader.__class__)
+        script = "# WARNING!\n# The back-up class source code is generated dynamically, and is not guaranteed to be correct.\n\n" + script
+        warnings.warn("The back-up class source code is generated dynamically, and is not guaranteed to be correct.")
     n = len(states)
     state = states[0]
     cashes = [{"KELP": 0, "RAINFOREST_RESIN": 0}]
     pnls = [{"KELP": 0, "RAINFOREST_RESIN": 0}]
+    sandbox_logs = []
     to_print = "Sandbox logs:\n"
     for i in range(n):
         cash = deepcopy(cashes[-1])
         output_buffer = io.StringIO()
         with contextlib.redirect_stdout(output_buffer):
             orders, conversions, traderData = trader.run(state)
+            orders:dict[Symbol, list[Order]]
+            conversions: int
+            traderData: str
         algo_log = output_buffer.getvalue().strip()
         to_print += json.dumps({
             "sandboxLog": "",
             "lambdaLog": algo_log,
             "timestamp": i*100
         }, indent=2)+'\n'
+        sandbox_logs.append({
+            "sandboxLog": "",
+            "lambdaLog": algo_log,
+            "timestamp": i*100
+        })
 
         if i<n-1:
             state = step(state, orders, conversions, traderData, states[i+1])
@@ -100,7 +124,7 @@ def run_backtest(script_path, states: list[TradingState]) -> list[int]:
                         cash[p] += trade.price*trade.quantity
             cashes.append(cash)
             pnls.append(get_pnl(cash, state))
-
+    
     prices_df, trades_df = states_to_df(states, pnls)
     prices_csv = prices_df.to_csv(sep=';', index=False)
     prices_str = io.StringIO(prices_csv).getvalue()
@@ -110,7 +134,39 @@ def run_backtest(script_path, states: list[TradingState]) -> list[int]:
     to_print += f"\n\n\nActivities log:\n{prices_str}\n\n\nTrade History:\n{trades_str}"
     now = datetime.now()
     hash = hashlib.sha256(script.encode()).hexdigest()[:6]
-    tag = now.strftime("%m-%d_%H.%M.%S_") +hash
-    script = f'# Date-Hash Tag: {tag}\n# Final pnls: {pnls[-1]}\n\n'+script
+    tag = now.strftime("%m-%d_%H.%M.%S_") + infix + hash
+    script = f'# Round-Time-Hash Tag: {tag}\n# Final pnls: {pnls[-1]}\n\n'+script
     save_result(script, to_print, tag)
-    return pnls
+    
+    return BacktestResult(
+        pnls,
+        sandbox_logs,
+        prices_df,
+        trades_df
+    )
+
+def run_backtest_with_round_and_day(trader, round, day, script = None, infix = '') -> BacktestResult:
+    print(f"Running backtest on day {day} of round {round}")
+    states = get_states_from_round_and_day(round, day)
+    result = test_trader_with_states(trader, states, script, f'R{round}D{day}_'+infix)
+    
+    print(f"Round {round} Day {day}", result.pnls[-1], f"Sum {sum(result.pnls[-1].values())}")
+    return result
+
+def run_backtest_with_round(trader, round, script=None, infix = '') -> list[BacktestResult]:
+    print(f"Running backtest on all days of round {round}")
+    days = {
+        0: 1
+    }
+    if round not in days:
+        raise NotImplementedError(f"Round {round} not supported yet")
+    results = []
+    for day in range(days[round]):
+        results.append(run_backtest_with_round_and_day(trader, round,day,script, infix))
+    return results
+
+def run_backtest_with_log(trader, log_dir,script, infix='') -> BacktestResult:
+    with open(log_dir,'r') as f:
+        states = read_log(f.read())
+    result = test_trader_with_states(trader, states, script, infix)
+    return result
