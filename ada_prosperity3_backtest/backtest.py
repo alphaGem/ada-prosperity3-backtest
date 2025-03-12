@@ -8,6 +8,12 @@ import pandas as pd
 from .log_to_states import read_log
 from tqdm import tqdm
 
+class SaveConfig:
+    def __init__(self, script=None, infix='', save_dir='ada_backtest'):
+        self.script = script
+        self.infix = infix
+        self.save_dir = save_dir
+
 class BacktestResult:
     def __init__(self, pnls:list[dict[Symbol,int]], sandbox_logs:list[dict], prices_df:pd.DataFrame, trades_df:pd.DataFrame):
         self.pnls = pnls
@@ -46,22 +52,21 @@ def get_pnl(cash: dict[Symbol, int], state: TradingState):
         pnl[p] += fair*state.position.get(p,0)
     return pnl
 
-def save_result(script, output, tag):
-    folder_name = "ada_backtest"
-    if not os.path.exists(folder_name):
-        os.makedirs(folder_name)
+def save_result(script, output, tag, save_dir):
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
 
-    log_folder = os.path.join(folder_name, "log")
+    log_folder = os.path.join(save_dir, "log")
     if not os.path.exists(log_folder):
         os.makedirs(log_folder)
 
-    script_folder = os.path.join(folder_name, "script")
+    script_folder = os.path.join(save_dir, "script")
     if not os.path.exists(script_folder):
         os.makedirs(script_folder)
 
-    with open(f"{folder_name}/log/{tag}.log","w") as f:
+    with open(f"{save_dir}/log/{tag}.log","w") as f:
         f.write(output)
-    with open(f"{folder_name}/script/{tag}.py","w") as f:
+    with open(f"{save_dir}/script/{tag}.py","w") as f:
         f.write(script)
 
 # Function to generate the class source code
@@ -80,14 +85,16 @@ def generate_class_source(cls):
 
     return class_code
 
-def test_trader_with_states(trader, states: list[TradingState], script = None, infix = ''):
+def test_trader_with_states(trader, states: list[TradingState], save_config: SaveConfig):
     if not hasattr(trader, "run"):
         print("Error: The `Trader` class must have a `run` method.")
         return
-    if script is None:
+    if save_config.script is None:
         script = generate_class_source(trader.__class__)
         script = "# WARNING!\n# The back-up class source code is generated dynamically, and is not guaranteed to be correct.\n\n" + script
         warnings.warn("The back-up class source code is generated dynamically, and is not guaranteed to be correct.")
+    else:
+        script = save_config.script
     n = len(states)
     state = states[0]
     cashes = [{"KELP": 0, "RAINFOREST_RESIN": 0}]
@@ -131,9 +138,9 @@ def test_trader_with_states(trader, states: list[TradingState], script = None, i
     to_print += f"\n\n\nActivities log:\n{prices_str}\n\n\nTrade History:\n{trades_str}"
     now = datetime.now()
     hash = hashlib.sha256(script.encode()).hexdigest()[:6]
-    tag = now.strftime("%m-%d_%H.%M.%S_") + infix + hash
+    tag = now.strftime("%m-%d_%H.%M.%S_") + save_config.infix + hash
     script = f'# Round-Time-Hash Tag: {tag}\n# Final pnls: {pnls[-1]}\n\n'+script
-    save_result(script, to_print, tag)
+    save_result(script, to_print, tag, save_config.save_dir)
     
     return BacktestResult(
         pnls,
@@ -142,15 +149,19 @@ def test_trader_with_states(trader, states: list[TradingState], script = None, i
         trades_df
     )
 
-def run_backtest_with_round_and_day(trader, round, day, script = None, infix = '') -> BacktestResult:
+def run_backtest_with_round_and_day(trader, round:int, day:int, save_config:SaveConfig=SaveConfig()) -> BacktestResult:
     print(f"Running backtest on day {day} of round {round}")
     states = get_states_from_round_and_day(round, day)
-    result = test_trader_with_states(trader, states, script, f'R{round}D{day}_'+infix)
+    result = test_trader_with_states(trader, states, SaveConfig(
+        save_config.script,
+        f'R{round}D{day}_'+save_config.infix,
+        save_config.save_dir
+    ))
     
     print(f"Round {round} Day {day}", result.pnls[-1], f"Sum {sum(result.pnls[-1].values())}")
     return result
 
-def run_backtest_with_round(trader, round, script=None, infix = '') -> list[BacktestResult]:
+def run_backtest_with_round(trader, round:int, save_config:SaveConfig=SaveConfig()) -> list[BacktestResult]:
     print(f"Running backtest on all days of round {round}")
     days = {
         0: 1
@@ -159,11 +170,11 @@ def run_backtest_with_round(trader, round, script=None, infix = '') -> list[Back
         raise NotImplementedError(f"Round {round} not supported yet")
     results = []
     for day in range(days[round]):
-        results.append(run_backtest_with_round_and_day(trader, round,day,script, infix))
+        results.append(run_backtest_with_round_and_day(trader, round,day,save_config))
     return results
 
-def run_backtest_with_log(trader, log_dir,script, infix='') -> BacktestResult:
+def run_backtest_with_log(trader, log_dir,save_config=SaveConfig()) -> BacktestResult:
     with open(log_dir,'r') as f:
         states = read_log(f.read())
-    result = test_trader_with_states(trader, states, script, infix)
+    result = test_trader_with_states(trader, states, save_config)
     return result

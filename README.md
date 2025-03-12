@@ -4,13 +4,13 @@
 
 2. The following commands can be used:
 
-- `ada-prosperity3-backtest script.py --round x [--day y]`
+- `ada-prosperity3-backtest script.py --round x [--day y] [--save_dir dir_to_save] [--infix infix_of_saved_file_name]`
 
    This will run `script.py` for you on round `x` day `y`. If `--day` is not specified, it will run on all days. The backtest tool should show you some information in the terminal.
 
    Currently, we only support round 0 day 0, which is the tutorial round.
 
-3. After running, you should see a `ada_backtest` folder at the place you run the commandline, and inside there is a `log` folder contaning backtest logs, which is compatible with the log output from the website, and a `script` folder containing the script you run backtest on, with some additional comments at the beginning as a summary of the backtest result. The files are named `mmdd_HHMMSS_RxDy_hhhhhh.log/py`, where mmdd is the month & date, HHMMSS is the hour, minute and second, RxDy means day y of round x, and hhhhhh is the hash of the script.
+3. After running, you should see a `ada_backtest` folder (or the `--save_dir` you specified) at the place you run the commandline, and inside there is a `log` folder contaning backtest logs, which is compatible with the log output from the website, and a `script` folder containing the script you run backtest on, with some additional comments at the beginning as a summary of the backtest result. The files are named `mmdd_HHMMSS_RxDy_infixhashid.log/py`, where mmdd is the month & date, HHMMSS is the hour, minute and second, RxDy means day y of round x, infix is the infix specified by you (if applicable), and hashid is the hash of the script.
 
 4. Iterate your algorithm accordingly!
 
@@ -18,14 +18,19 @@
 
 ```python
 from ada_prosperity3_backtest.backtest import run_backtest_with_round_and_day
-result = run_backtest_with_round_and_day(trader, round, day, script, infix)
+from ada_prosperity3_backtest.backtest import SaveConfig
+save_config = SaveConfig(
+    script = None, # will automatically extract the script to save using the inspect module
+    infix = 'trivial_strategy', # will appear in the name of the saved file
+    save_dir = 'my_backtest', # the folder to save
+)
+result = run_backtest_with_round_and_day(trader, round, day, save_config)
 '''
 Arguments:
     trader: Trader, your strategy
     round: int
     day: int
-    script: [str|None], the script you want to save. If none, we will try to automatically detect the Trader class.
-    infix: [str|None], the infix of saving.
+    save_config: SaveConfig class, consisting of save_config.script (the strategy script string to save), save_config.infix (the infix of saving file) and save_config.save_dir (the directory of the save).
 Returns:
     result: BacktestResult, consisting of:
         result.pnls, a list of dictionary, the breakdown of accumulated pnls for each product in each turn.
@@ -108,3 +113,5 @@ According to our available data (n<10), the website result in the tutorial round
 - [ ] Support conversions.
 
 - [ ] Support secret spices and secret bots, which allows users to customize.
+
+- [ ] Optimization of speed: pre-compile something, and pre-process the csv files to reduce the loading time.

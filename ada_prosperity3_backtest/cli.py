@@ -1,6 +1,6 @@
 import argparse, os, sys, importlib
 import pandas as pd
-from .backtest import run_backtest_with_round_and_day, run_backtest_with_round, run_backtest_with_log
+from .backtest import SaveConfig, run_backtest_with_round_and_day, run_backtest_with_round, run_backtest_with_log
 from .datamodel import *
 
 def load_strategy(script_path):
@@ -33,16 +33,23 @@ def main():
     parser.add_argument("--log_dir", type=str, required=False, help="Directory containing the test file")
     parser.add_argument("--round", type=int, required=False, help="Competition round number")
     parser.add_argument("--day", type=int, required=False, help="Day of the round")
+    parser.add_argument("--save_dir", type=str, default="ada_backtest", help="The directory to save logs and backups")
+    parser.add_argument("--infix", type=str, default="", help="The infix of saved file, which will appear in the name of the saved file")
 
     args = parser.parse_args()
     script, trader = get_trader(args.script)
+    save_config = SaveConfig(
+        script = script,
+        infix = args.infix,
+        save_dir = args.save_dir
+    )
     if args.log_dir is not None:
-        run_backtest_with_log(trader, args.log_dir, script)
+        run_backtest_with_log(trader, args.log_dir, save_config)
     elif args.round is not None:
         if args.day is None:
-            run_backtest_with_round(trader, args.round, script)
+            run_backtest_with_round(trader, args.round, save_config)
         else:
-            run_backtest_with_round_and_day(trader, args.round, args.day, script)
+            run_backtest_with_round_and_day(trader, args.round, args.day, save_config)
     else:
         raise AttributeError("Must either specify the directory containing the test file by `--dir path`, or specify the round you would like to test by `--round x`.")
 
